@@ -1,0 +1,117 @@
+# Copyright (c) 2016 Jennifer Holt
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and 
+# associated documentation files (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge, publish, distribute,
+# sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all copies or
+# substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+# NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+# OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+#===============================================================================
+#USB interface
+#===============================================================================
+NET "fx2Data_io<0>"   LOC="p83"  |IOSTANDARD=LVTTL;   # PB0/FD0
+NET "fx2Data_io<1>"   LOC="p82"  |IOSTANDARD=LVTTL;   # PB1/FD1
+NET "fx2Data_io<2>"   LOC="p81"  |IOSTANDARD=LVTTL;   # PB2/FD2
+NET "fx2Data_io<3>"   LOC="p80"  |IOSTANDARD=LVTTL;   # PB3/FD3
+NET "fx2Data_io<4>"   LOC="p74"  |IOSTANDARD=LVTTL;   # PB4/FD4
+NET "fx2Data_io<5>"   LOC="p75"  |IOSTANDARD=LVTTL;   # PB5/FD5
+NET "fx2Data_io<6>"   LOC="p78"  |IOSTANDARD=LVTTL;   # PB6/FD6
+NET "fx2Data_io<7>"   LOC="p79"  |IOSTANDARD=LVTTL;   # PB7/FD7
+NET "fx2GotRoom_in"   LOC="p67"  |IOSTANDARD=LVTTL;   # CTL1/FLAGB
+NET "fx2GotData_in"   LOC="p66"  |IOSTANDARD=LVTTL;   # CTL2/FLAGC
+NET "fx2Read_out"     LOC="p57"  |IOSTANDARD=LVTTL;   # RDY0/SLRD
+NET "fx2Write_out"    LOC="p58"  |IOSTANDARD=LVTTL;   # RDY1/SLWR
+NET "fx2Addr_out1"    LOC="p51"  |IOSTANDARD=LVTTL;   # PA5/FIFOADR1
+NET "fx2PktEnd_out"   LOC="p50"  |IOSTANDARD=LVTTL;   # PA6/PKTEND
+NET "fx2Clk_in"       LOC="p84"  |IOSTANDARD=LVTTL;   # IFCLK
+
+#===============================================================================
+# On-board peripheral signals
+#===============================================================================
+NET "LED<0>"          LOC="p47"  |IOSTANDARD=LVTTL;
+NET "LED<1>"          LOC="p46"  |IOSTANDARD=LVTTL;
+NET "LED<2>"          LOC="p45"  |IOSTANDARD=LVTTL;
+NET "LED<3>"          LOC="p41"  |IOSTANDARD=LVTTL;
+NET "Button_in<0>"    LOC="p48"  |IOSTANDARD=LVTTL;
+NET "Button_in<1>"    LOC="p38"  |IOSTANDARD=LVTTL;
+
+#================================================================================
+# Leptons
+#================================================================================
+NET "Lepton_FSYNC<0>" LOC="p119" |IOSTANDARD=LVTTL;
+NET "Lepton_MISO<0>"  LOC="p112" |IOSTANDARD=LVTTL;
+NET "Lepton_CLK<0>"   LOC="p111" |IOSTANDARD=LVTTL;
+NET "Lepton_CS<0>"    LOC="p114" |IOSTANDARD=LVTTL;
+NET "Lepton_SCL<0>"   LOC="p115" |IOSTANDARD=LVTTL;
+NET "Lepton_SDA<0>"   LOC="p116" |IOSTANDARD=LVTTL;
+NET "Lepton_PWD<0>"   LOC="p117" |IOSTANDARD=LVTTL;
+NET "Lepton_RST<0>"   LOC="p118" |IOSTANDARD=LVTTL;
+NET "Lepton_MCLK<0>"  LOC="p120" |IOSTANDARD=LVTTL;
+
+NET "Lepton_FSYNC<1>" LOC="p131" |IOSTANDARD=LVTTL;
+NET "Lepton_MISO<1>"  LOC="p142" |IOSTANDARD=LVTTL;
+NET "Lepton_CLK<1>"   LOC="p143" |IOSTANDARD=LVTTL;
+NET "Lepton_CS<1>"    LOC="p141" |IOSTANDARD=LVTTL;
+NET "Lepton_SCL<1>"   LOC="p140" |IOSTANDARD=LVTTL;
+NET "Lepton_SDA<1>"   LOC="p139" |IOSTANDARD=LVTTL;
+NET "Lepton_PWD<1>"   LOC="p138" |IOSTANDARD=LVTTL;
+NET "Lepton_RST<1>"   LOC="p133" |IOSTANDARD=LVTTL;
+NET "Lepton_MCLK<1>"  LOC="p132" |IOSTANDARD=LVTTL;
+
+#================================================================================
+# DisplayA
+#================================================================================
+NET "DisplayA_D<0>"   LOC="p92"  |IOSTANDARD=LVTTL;
+NET "DisplayA_D<1>"   LOC="p97"  |IOSTANDARD=LVTTL;
+NET "DisplayA_D<2>"   LOC="p94"  |IOSTANDARD=LVTTL;
+NET "DisplayA_D<3>"   LOC="p100" |IOSTANDARD=LVTTL;
+NET "DisplayA_D<4>"   LOC="p95"  |IOSTANDARD=LVTTL;
+NET "DisplayA_D<5>"   LOC="p105" |IOSTANDARD=LVTTL;
+NET "DisplayA_D<6>"   LOC="p98"  |IOSTANDARD=LVTTL;
+NET "DisplayA_D<7>"   LOC="p101" |IOSTANDARD=LVTTL;
+NET "DisplayA_DCX"    LOC="p93"  |IOSTANDARD=LVTTL;
+NET "DisplayA_WRX"    LOC="p88"  |IOSTANDARD=LVTTL;
+NET "DisplayA_RESX"   LOC="p99"  |IOSTANDARD=LVTTL;
+NET "DisplayA_TE"     LOC="p104" |IOSTANDARD=LVTTL;
+NET "DisplayA_LIGHT"  LOC="p85"  |IOSTANDARD=LVTTL;
+
+#================================================================================
+# DisplayB
+#================================================================================
+NET "DisplayB_D<0>"   LOC="p9"   |IOSTANDARD=LVTTL;
+NET "DisplayB_D<1>"   LOC="p6"   |IOSTANDARD=LVTTL;
+NET "DisplayB_D<2>"   LOC="p10"  |IOSTANDARD=LVTTL;
+NET "DisplayB_D<3>"   LOC="p5"   |IOSTANDARD=LVTTL;
+NET "DisplayB_D<4>"   LOC="p12"  |IOSTANDARD=LVTTL;
+NET "DisplayB_D<5>"   LOC="p8"   |IOSTANDARD=LVTTL;
+NET "DisplayB_D<6>"   LOC="p14"  |IOSTANDARD=LVTTL;
+NET "DisplayB_D<7>"   LOC="p15"  |IOSTANDARD=LVTTL;
+NET "DisplayB_DCX"    LOC="p22"  |IOSTANDARD=LVTTL;
+NET "DisplayB_WRX"    LOC="p7"   |IOSTANDARD=LVTTL;
+NET "DisplayB_RESX"   LOC="p16"  |IOSTANDARD=LVTTL;
+NET "DisplayB_TE"     LOC="p11"  |IOSTANDARD=LVTTL;
+NET "DisplayB_LIGHT"  LOC="p1"   |IOSTANDARD=LVTTL;
+
+#================================================================================
+# Serial memory
+#================================================================================
+NET "MEM_CS"          LOC="p35"  |IOSTANDARD=LVTTL;
+NET "MEM_SCK"         LOC="p24"  |IOSTANDARD=LVTTL;
+NET "MEM_D<0>"        LOC="p23"  |IOSTANDARD=LVTTL;
+NET "MEM_D<1>"        LOC="p34"  |IOSTANDARD=LVTTL;
+NET "MEM_D<2>"        LOC="p27"  |IOSTANDARD=LVTTL;
+NET "MEM_D<3>"        LOC="p26"  |IOSTANDARD=LVTTL;
+NET "MEM_PWR"         LOC="p40"  |IOSTANDARD=LVTTL;
+
+#Timing constraints
+NET "fx2Clk_in" TNM_NET = fx2Clk_in;
+TIMESPEC TS_fx2Clk_in = PERIOD "fx2Clk_in" 20.833333 ns HIGH 50%;

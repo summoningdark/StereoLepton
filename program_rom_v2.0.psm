@@ -1,0 +1,414 @@
+; program_rom_v2.0.psm
+;
+; By Jennifer Holt
+;
+; control program for the Setereo Lepton V2.0 firmware.
+; sets up the leptons as Monochromatic, AGC on by default.
+; on button commands 2,3 it cycles through color pallets
+; on button command 1 it toggles AGC calculation
+
+
+;Config register bits (reg 0,1 at chanAddr 1,2) Config Registers accessed through DVR
+;reg0 {reserved, 2'I2Cmux, framer_en, packet_en, Startup_en, LCD_en, Global_en}
+;reg1 {4'reserved, AGCen, 2'TelemetryMode, fpixel}
+
+;RAM addresses 7,8 are used for reading writing Config reg, don't use them for general DVR transactions
+
+; SFR port_id definitions 
+; these are used in the useful subroutines below for port access.
+constant Port,		00
+constant Iflags,	01	;8-bit interrupt flags
+constant DVRpointer, 	02	;8-bit RAM pointer for DVR transactions
+constant DVRcount, 	03	;8-bit byte count for DVR transactions
+constant DVRctrl, 	04	;{4'reserved, writing, reading, start_write, start_read} 
+constant ROMLow, 	05
+constant ROMHigh, 	06 
+
+; Status settings
+;{3'ColorMode, 1'AGCMode, 1'AGCen, 2'TelemetryMode, 1'fpixel}
+constant DEFAULT,	19	;RGB888, no telemetry, AGC on, AGC mode 1, color mode 0
+
+;chanAddr constants
+constant I2CFIFO,	03	;I2C read/write FIFO chanAddr
+constant I2CADDR,	07	;I2C Slave Address (16-bit)
+constant I2CBYTES,	08	;I2C Bytes to Read
+
+; register naming
+namereg sf, Status		;holds a mirror of Config Register1, lepton data settings
+namereg se, NewStatus		;holds the requested new status for calls to SetStatus
+namereg sd, CommIDHigh		;Lepton command-ID high byte
+namereg sc, CommIDLow		;Lepton command-ID low byte
+namereg sa, DataLength		;Lepton Data length (limited to less than 255 bytes)
+namereg s9, DataPointer		;pointer to RAM where data for Lepton write/read is stored
+namereg s8, ConfigRegN		;Config Reg number (0,1)
+namereg s7, ConfigRegData	;Data to read/write from Config Reg
+namereg s6, LeptonStatusLow	;Lepton status Low Byte
+namereg s5, LeptonStatusLow	;Lepton status Low Byte
+	
+start:
+
+;do starup
+load ConfigRegN, 00
+load ConfigRegData, 03
+call ConfigRegWrite
+
+; wait for startup finished
+startupLoop:
+input s0, Port		;read port
+test s0, 01		;test bit 1,(Lepton nRst)
+jump Z, startupLoop	;wait till nRst is high
+
+; set default operating state
+load NewStatus, DEFAULT
+call SetStatus
+
+ENABLE INTERRUPT	;enable interrupts
+WaitLoop:		;loop forever waiting for command interrupts
+jump WaitLoop
+
+
+
+;***************************************subroutines***************************************************
+
+ConfigRegWrite:
+;writes a config register (0,1) passed in ConfigRegN
+;with the value passed in ConfigRegData
+;uses RAM 7,8
+load s0, ConfigRegN		;copy config reg number
+add s0, 01			;chanAddr is reg number + 1
+output s0, 07			;put chanAddr in RAM 07
+output ConfigRegData, 08	;put data in RAM 08
+outputk 7, DVRpointer		;we put the data in RAM starting at address 7
+outputk 1, DVRcount		;1 data bytes(do not count chanAddr byte)
+call DVRwrite
+return
+
+ConfigRegRead:
+;reads a config register (0, 1) passed in ConfigRegN
+;stores the value in ConfigRegData
+;uses RAM 7,8
+load s0, ConfigRegN		;copy config reg number
+add s0, 01			;chanAddr is reg number + 1
+output s0, 07			;put chanAddr in RAM 07
+outputk 7, DVRpointer		;we put the data in RAM starting at address 7
+outputk 1, DVRcount		;1 data bytes(do not count chanAddr byte)
+call DVRread
+input ConfigRegData, 08
+return
+
+WaitI2C:
+;waits for I2C module to be ready
+input s0, Port		;read port
+test s0, 02		;test bit 2,(I2C ready)
+jump Z, WaitI2C		;wait till ready is high
+return
+
+LeptonStatus:
+;polls the Lepton Status
+;does not change the I2C mux settings, these must be set before calling LeptonStatus
+;returns status in LeptonStatusLow, LeptonStatusHigh
+ 
+call WaitI2C			;wait for I2C module
+;write Lepton slave address to I2C module
+load s0, I2CADDR
+output s0, 09			;put chanAddr in RAM 09
+load s0, 2a
+output s0, 0a			;put Lepton slave address(low) in RAM 0a
+load s0, 00
+output s0, 0b			;put Lepton slave address(high) in RAM 0b
+outputk 09, DVRpointer		;we put the chanAddr in RAM address 9
+outputk 02, DVRcount		;2 data bytes(do not count chanAddr byte)
+call DVRwrite
+;set the bytes to read to 2
+load s0, I2CBYTES
+output s0, 09			;put chanAddr in RAM 09
+load s0, 02
+output s0, 0a			;put bytes to read(low) in RAM 0a
+load s0, 00
+output s0, 0b			;put bytes to read(high) in RAM 0b
+outputk 09, DVRpointer		;we put the chanAddr in RAM address 9
+outputk 02, DVRcount		;2 data bytes(do not count chanAddr byte)
+call DVRwrite
+;write Lepton sub-address to FIFO(status is 0002)
+load s0, I2CFIFO
+output s0, 09			;put chanAddr in RAM 09
+load s0, 00
+output s0, 0a			;put Lepton sub-address(high) in RAM 0a
+load s0, 02
+output s0, 0b			;put Lepton sub-address(low) in RAM 0b
+outputk 09, DVRpointer		;we put the chanAddr in RAM address 9
+outputk 02, DVRcount		;2 data bytes(do not count chanAddr byte)
+call DVRwrite
+call WaitI2C			;wait for everything to complete
+input LeptonStatusLow, 0a
+input LeptonStatusHigh, 0b
+return
+
+WaitLeptons:
+;waits for both Leptons to be not busy
+;preserves the status of config reg 0
+
+;get the current status of config reg0
+load ConfigRegN, 00
+call ConfigRegRead
+load s0, ConfigRegData		;copy configReg to s0 and s1
+load s1, ConfigRegData
+
+;wait for LeptonA to be ready
+;set mux to Lepton A
+and s1, 1f			;clear I2C mux bits
+or s1, 20			;set I2C mux bit 0
+load ConfigRegData, s1
+call ConfigREgWrite		;write to config reg
+LeptonI2C_wait1:
+call LeptonStatus
+test LeptonStatusLow, 01	;test bit 0 of Status
+jump NZ, LeptonI2C_wait1:
+;wait for LeptonB to be ready
+;set mux to Lepton B
+load s1, s0			;copy original config reg value to s1
+and s1, 1f			;clear I2C mux bits
+or s1, 40			;set I2C mux bit 1
+load ConfigRegData, s1
+call ConfigREgWrite		;write to config reg
+LeptonI2C_wait2:
+call LeptonStatus
+test LeptonStatusLow, 01	;test bit 0 of Status
+jump NZ, LeptonI2C_wait2:
+
+;restore config reg 0
+load ConfigRegData, s0
+call ConfigRegWrite		;write to config reg
+return
+
+LeptonI2C:
+;handles writing values/commands to both leptons
+;takes a command ID in registers CommIDHigh and CommIDLow
+;takes a data length in register DataLength
+;takes a pointer to the data in register DataPointer
+
+call WaitLeptons
+;set I2C mux to both
+load ConfigRegN, 00
+call ConfigRegRead
+load s0, ConfigRegData		;copy configReg to s0
+or s0, 60			;set both mux bits
+
+;write data registers
+load s0, I2CADDR
+output s0, 09			;put chanAddr in RAM 09
+load s0, 2a
+output s0, 0a			;put Lepton slave address(low) in RAM 0a
+load s0, 00
+output s0, 0b			;put Lepton slave address(high) in RAM 0b
+outputk 09, DVRpointer		;we put the chanAddr in RAM address 9
+outputk 02, DVRcount		;2 data bytes(do not count chanAddr byte)
+call DVRwrite
+
+load s0, I2CFIFO
+output s0, DataPointer		;put chanAddr in RAM
+load s0, DataPointer
+output s0, DVRpointer		;set DVR pointer
+load s0, DataLength
+output s0, DVRcount		;set DVR count
+
+
+
+
+;write data length register
+
+;write command register
+
+return
+
+SetStatus:
+; sets the camera interface parameters.
+; does the necessary I2C communication to the cameras, updates Status, updates the ConfigReg
+; and does the necessary resetting of the interface cores.
+; new status byte is passed in REGBANK A, NewStatus (sE)
+
+; decode the required state 
+; s1 contains only parameter bits
+; s2 contains only ACG setting bits
+; s3 contains only color setting bits
+load s1, NewStatus		;grab a copy of state register
+load s2, NewStatus		;grab a copy of state register
+load s3, NewStatus		;grab a copy of state register
+and s1, 0f			;mask off the AGC and Color bits from s1
+and s2, 10			;mask off Color and Parameter bits from s2
+and s3, e0			;mask off AGC and Parameter bits from s3
+
+; check new parameters against old parameters
+load s4, Status			;get a copy of Status
+and s4, 0f			;mask off color and agc bits
+compare s4, s1			;see if parameters match
+jump Z, SetStatus1		;if parameters match, there is no need to disable the packet/framer
+;parameters don't match, packet and framer should be disabled for updates
+load ConfigRegN, 00
+load ConfigRegData, 03
+call ConfigRegWrite
+;set camera pixel mode
+load CommIDHigh, 48		;OEM module base is 0800 (4800 with oem bit set)
+load CommIDLow,	29		;Pixel format command ID is base 28, (29 for set)		
+load DataLength, 02		;one word for the pixel mode
+load DataPointer, 07		;RGB888=03, RAW14=07
+;set camera telemetry mode
+;load CommIDHigh, 00
+;load CommIDLow,	00
+;load DataLength, 00
+;load DataPointer, 07
+;set camera AGC mode
+load CommIDHigh, 01		;AGC subsystem base is 0100 
+load CommIDLow,	01		;AGC enable is 00 (01 for set)
+load DataLength, 02		;one word for the AGC enable
+load DataPointer, 07		;AGC on = 0001, AGC off = 0000 
+
+SetStatus1:
+;test AGC settings
+load s4, Status
+and s4, 10
+compare s4, s2
+jump Z, SetStatus2		;if AGC settings are unchanged, jump to color settings
+;set camera AGC settings
+load CommIDHigh, 01		;AGC subsystem base is 0100 
+load CommIDLow,	49		;AGC calculation enable state is 48 (49 for set)
+load DataLength, 02		;one word
+load DataPointer, 07		;0 = AGC frozen, 1 = AGC active
+SetStatus2:
+;test color settings
+load s4, Status
+and s4, e0
+compare s4, s3
+jump Z, SetStatus3		;if color settings are unchanged, jump to finailze
+;set camera color pallet
+;pallets:
+;Grayscale = 0
+;Fusion = 1
+;Rainbow = 2
+;AllRed = 3
+;Sepia = 4
+;Color = 5
+;IceFire = 6
+;Rain = 7
+load CommIDHigh, 03		;VID subsystem base is 0300 
+load CommIDLow,	05		;LUT select is 04 (05 for set)
+load DataLength, 02		;one word for LUT select
+load DataPointer, 07		 
+
+SetStatus3:
+;update Status
+load Status, NewStatus
+;update config register 1
+load ConfigRegN, 01
+load ConfigRegData, NewStatus
+call ConfigRegWrite
+;re-enable packet and framer
+load ConfigRegN, 00
+load ConfigRegData, 0f
+call ConfigRegWrite
+return 
+
+
+;********************utility routines (use bank B for passing parameters)*****************************
+DVRwrite:
+; waits for the DVR engine to be ready, starts transmission, waits for completion.
+; uses bank B for temporary registers
+
+regbank B ;switch to bank B
+;wait for the DVR engine to be ready
+waitDVRwrite1: input s0, DVRctrl
+test s0, ff
+jump NZ, waitDVRwrite1
+outputk 2, DVRctrl		;second bit in DVRctrl starts a write
+;wait for the transfer to complete
+waitDVRwrite2: input s0, DVRctrl
+test s0, ff
+jump NZ, waitDVRwrite2
+regbank A ;switch back to bank A
+
+return
+
+DVRread:
+; waits for the DVR engine to be ready, starts transmission, waits for completion.
+; uses bank B for temporary registers
+
+regbank B ;switch to bank B
+;wait for the DVR engine to be ready
+waitDVRread1: input s0, DVRctrl
+test s0, ff
+jump NZ, waitDVRread1
+outputk 1, DVRctrl		;first bit in DVRctrl starts a read
+;wait for the transfer to complete
+waitDVRread2: input s0, DVRctrl
+test s0, ff
+jump NZ, waitDVRread2
+regbank A ;switch back to bank A
+
+return
+
+DVRwrite_then_read:
+; waits for the DVR engine to be ready, starts write and read at same time.
+; DVRengine prioritizes writes, so that is done first, read immediately follows.
+; uses bank B for temporary registers
+
+regbank B ;switch to bank B
+;wait for the DVR engine to be ready
+waitDVRwtr1: input s0, DVRctrl
+test s0, ff
+jump NZ, waitDVRwtr1
+outputk 3, DVRctrl		;second and first bit set, write takes precedence in DVRengine
+;wait for the transfer to complete
+waitDVRwtr2: input s0, DVRctrl
+test s0, ff
+jump NZ, waitDVRwtr2
+
+regbank A ;switch back to bank A
+
+return
+
+ROM2RAM:
+; values passed in bank B, bank A restored before return
+; transfers s3 bytes in ROM starting at  address {s1,s0} to RAM starting at address s2
+regbank B ;switch to bank B (bank B used for values passed to function)
+output s0, ROMLow	;set ROM address
+output s1, ROMHigh
+r2rLoop: 
+sub s3, 1		;decrement count
+jump C, r2rexit		;if done exit
+input s4, ROMLow	;read first byte
+output s4, s2		;write byte to RAM
+add s2, 1		;increment RAM pointer
+sub s3, 1		;decrement count
+jump C, r2rexit		;if done exit
+input s4, ROMHigh	;read next byte
+output s4, s2		;write byte to RAM
+add s2, 1		;increment RAM pointer
+jump r2rLoop		;loop for all bytes
+
+r2rexit:
+regbank A ;switch back to bank A
+return
+
+;ISR, uses syntax enhancements from opbasm
+ISR:
+address 3FF
+jump ISR	    	; Assemble instruction at interrupt vector location
+address ISR  		; Resume assembly at address previously captured in "my_isr"
+
+returni enable
+
+;************************************* data **********************************************************
+
+
+;DVR command to poll lepton status
+;ChanAddr for I2C is 03 for FIFO
+LpollStatus:
+inst 00803
+inst 00607
+inst 00405
+inst 00203
+inst 00001
+
+
+
+

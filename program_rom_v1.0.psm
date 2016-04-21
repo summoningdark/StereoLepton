@@ -1,0 +1,294 @@
+; Copyright (c) 2016 Jennifer Holt
+;
+; Permission is hereby granted, free of charge, to any person obtaining a copy of this software and 
+; associated documentation files (the "Software"), to deal in the Software without restriction,
+; including without limitation the rights to use, copy, modify, merge, publish, distribute,
+; sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+; furnished to do so, subject to the following conditions:
+;
+; The above copyright notice and this permission notice shall be included in all copies or
+; substantial portions of the Software.
+
+; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+; NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+; NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+; DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+; OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+; program_rom.psm
+;
+; By Jennifer Holt
+;
+; program for the CommFPGA_PicoController for initialization of the stereo_flir project
+; enables both cameras, sets the automatic gain control, then enables the displays.
+; in future, possible setting of colormap using buttons
+
+constant chanAddr, 00
+constant rdCount, 03
+constant rdData, 04
+constant wrData, 02
+constant wrMode, 01
+constant romLow, 05
+constant romHigh, 06 
+
+;these are CommFPGA chanAddr values, not picoblaze port_id values
+constant BoardConfig, 01	;board config register
+constant L1Base, 02		;base address
+constant L1SerFifo, 05 		;write or read I2C bytes here
+constant L1SerStatus, 08	;read I2C status here
+constant L1SerAdd, 09		;set I2C slave address here(2-bytes, write burst mode)
+constant L1SerReadBytes, 0a	;Set the number of bytes to read here(2-bytes, write burst mode)
+
+constant L2Base, 0b
+constant L2SerFifo, 0e 		;write or read I2C bytes here
+constant L2SerStatus, 11	;read I2C status here
+constant L2SerAdd, 12		;set I2C slave address here(2-bytes, write burst mode)
+constant L2SerReadBytes, 13	;Set the number of bytes to read here(2-bytes, write burst mode)
+
+start: 
+; put some useful values in SPM
+load s4, 19			;Load SPM 00 with 0x19 (global and lepton enables)
+store s4, 00
+load s4, 01			;Load SPM 01 with 0x01 (Lepton camera enable)
+store s4, 01
+load s4, 2a			;Load SPM 02 with 0x2a (Lepton I2C slave address)
+store s4, 02
+load s4, 47			;Load SPM 03 with 0x47 (Lepton camera, packet, framer enables, ACG mode)
+store s4, 03
+load s4, 1f			;Load SPM 04 with 0x1f (global, lepton and display enables)
+store s4, 04
+
+; set global and lepton enables (write 0x19 to chanAddr 1)
+load s0, BoardConfig		
+load s1, 01			;one byte
+load s2, 00			;SPM 00 holds 0x19
+load s3, 00			;Burst mode
+call write_spm
+; enable Lepton startup
+; write 0x01 to the Lepton base address
+load s0, L1Base			
+load s1, 01			;one byte
+load s2, 01			;SPM 01 holds 0x01
+call write_spm
+load s0, L2Base			
+load s1, 01			;one byte
+load s2, 01			;SPM 01 holds 0x01			
+call write_spm
+
+;pause for lepton startup time (15ms for 0xFFFF and 24MHz instruction cycle) 
+load s0, ff			;Pause counts down from {s1, s0} and returns when 0
+load s1, ff
+call Pause
+
+;write slave address to I2C
+load s0, L1SerAdd
+load s1, 01			;one byte
+load s2, 02			;SPM 02 holds 0x2a
+call write_spm			;write to L1SerAdd
+load s0, L2SerAdd
+load s1, 01			;one byte
+load s2, 02			;SPM 02 holds 0x2a
+call write_spm			;write to L2SerAdd
+
+;write lepton data length register
+load s0, L1SerFifo
+load s1, 04			;four bytes for this, 0x00060001
+load s2, DataLength'lower	; ROM pointer low byte
+load s3, DataLength'upper	; ROM pointer high byte
+load s4, 00			; burst mode
+call write_rom
+
+load s0, L2SerFifo
+load s1, 04			; four bytes for this, 0x00060001
+load s2, DataLength'lower	; ROM pointer low byte
+load s3, DataLength'upper	; ROM pointer high byte
+load s4, 00			; burst mode
+call write_rom
+
+;need to wait till the I2C cores finish transmitting
+call wait_I2C
+
+load s0, ff			;Pause counts down from {s1, s0} and returns when 0
+load s1, ff
+call Pause
+;write lepton data register
+load s0, L1SerFifo
+load s1, 04			;four bytes for this, 0x00080001
+load s2, Data0'lower		; ROM pointer low byte
+load s3, Data0'upper		; ROM pointer high byte
+load s4, 00			; burst mode
+call write_rom
+
+load s0, L2SerFifo
+load s1, 04			; four bytes for this, 0x00080001
+load s2, Data0'lower		; ROM pointer low byte
+load s3, Data0'upper		; ROM pointer high byte
+load s4, 00			; burst mode
+call write_rom
+
+;need to wait till the I2C cores finish transmitting
+call wait_I2C
+
+load s0, ff			;Pause counts down from {s1, s0} and returns when 0
+load s1, ff
+call Pause
+
+;write lepton command register
+load s0, L1SerFifo
+load s1, 04			;four bytes for this, 0x00040101
+load s2, Command'lower		; ROM pointer low byte
+load s3, Command'upper		; ROM pointer high byte
+load s4, 00			; burst mode
+call write_rom
+
+load s0, L2SerFifo
+load s1, 04			; four bytes for this, 0x00040101
+load s2, Command'lower		; ROM pointer low byte
+load s3, Command'upper		; ROM pointer high byte
+load s4, 00			; burst mode
+call write_rom
+
+;need to wait till the I2C cores finish transmitting
+call wait_I2C
+
+load s0, ff			;Pause counts down from {s1, s0} and returns when 0
+load s1, ff
+call Pause
+;now enable the displays
+
+
+; enable Lepton startup, packet and framer
+; write 0x07 to the Lepton base address
+load s0, L1Base			
+load s1, 01			;one byte
+load s2, 03			;SPM 01 holds 0x01
+call write_spm
+load s0, L2Base			
+load s1, 01			;one byte
+load s2, 03			;SPM 01 holds 0x01			
+call write_spm
+
+; set global, lepton and display enables (write 0x1f to chanAddr 1)
+load s0, BoardConfig		
+load s1, 01			;one byte
+load s2, 04			;SPM 04 holds 0x1f
+load s3, 00			;Burst mode
+call write_spm
+
+start_loop:
+JUMP start_loop
+
+
+; polls the I2C interface of the Leptons and waits till they are idle
+wait_I2C:
+;poll L1
+load s0, L1SerStatus
+load s1, 01
+load s2, 00
+call read			;read L1 I2C status register
+fetch s3, 00			
+test s3, 01			;test bit 0
+jump z, wait_I2C		;if bit is clear, the core is busy
+wait_I2C2:
+;poll L2
+load s0, L2SerStatus
+load s1, 01
+load s2, 00
+call read			;read L2 I2C status register
+fetch s3, 00			
+test s3, 01			;test bit 0
+jump z, wait_I2C2		;if bit is clear, the core is busy
+return
+
+;counts down a 16-bit value stored in {s1,s0} and returns when 0
+;3 instructions per decrement, 2 clocks/instruction so 6 clocks per decrement
+Pause:
+sub s0, 01			;subtract 1 from s0
+subcy s1, 00			;subtract the carry from s1
+jump nz, Pause			;loop until 0
+return
+
+; CommFPGA Read routine
+; reads a sequence of bytes from the DVR interface and stores them in the scratchpad memory
+; s0 holds the chanAddr to read from
+; s1 holds the number of bytes to read
+; s2 holds the scratchpad address start
+read:
+output s0, chanAddr		;write the chanAddr
+;write the number of bytes to read to the read counter(this also resets the read FIFO)
+output s1, rdCount
+read_wait_loop:
+;wait for the read count to be 0
+input s3, rdCount		;read the counter
+test s3, ff			;test value
+jump nz, read_wait_loop		;loop if not zero
+read_loop:
+input s3, rdData		;read a value from the fifo
+store s3, s2			;store it in SPM
+add s2, 01			;increment the SPM pointer
+sub s1, 01			;decrement the count
+jump nz, read_loop		;loop if count is not 0
+return
+
+; CommFPGA Write from SPM routine
+; writes a sequence of bytes in scratchpad memory to the DVR interface
+; s0 holds the chanAddr to write to
+; s1 holds the number of bytes to write
+; s2 holds the start address in scratchpad memory.
+; s3 holds the write mode. 0=burst, non-0 = one by one.
+write_spm:
+output s0, chanAddr		;output the chanAddr
+output s3, wrMode		;output the write mode
+write_spm_loop:
+fetch s4, s2			;fetch the value to write from SPM
+output s4, wrData		;output the value to the write fifo
+add s2, 01			;increment the SPM pointer
+sub s1, 01			;decrement the count
+jump nz, write_spm_loop		;loop for all bytes
+outputk 01, wrMode		;set the wrMode bit to send all bytes
+write_spm_wait:
+input s4, wrData		;get the write FIFO status
+test s4, 01			;mask all but the empty bit
+jump z, write_spm_wait		;wait for empty bit set
+return
+
+; CommFPGA Write from ROM routine
+; writes a sequence of bytes in ROM to the DVR interface
+; s0 holds the chanAddr to write to
+; s1 holds the number of bytes to write
+; s2 holds the start address low byte.
+; s3 holds the start address high byte.
+; s4 holds the write mode. 0=burst, non-0 = one by one.
+write_rom:
+output s0, chanAddr		;output the chanAddr
+output s4, wrMode		;output the write mode
+output s2, romLow		;set the ROM pointer
+output s3, romHigh
+output s3, romHigh		;need a dummy instruction for the ROM memory to catch up
+write_rom_loop:
+input s5, romLow		;get the low byte from ROM
+output s5, wrData		;output the value to the write fifo
+sub s1, 01			;decrement the count
+jump z, write_rom_end		;check if done
+input s5, romHigh		;get the high byte from ROM(also increments pointer)
+output s5, wrData		;output the value to the write fifo
+sub s1, 01			;decrement the count
+jump nz, write_rom_loop		;loop for all bytes
+outputk 01, wrMode		;set the wrMode bit to send all bytes
+write_rom_wait:
+input s4, wrData		;get the write FIFO status
+test s4, 01			;mask all but the empty bit
+jump z, write_rom_wait		;wait for empty bit set
+write_rom_end:
+return
+
+;set up the I2C sequence to enable AGC
+DataLength:
+inst 00600		;Lepton data length register is at slave address 0006, write 1 to it
+inst 00100
+Data0:
+inst 00800		;Lepton data0 register is at slave address 0008, write 1 to it
+inst 00100
+Command:
+inst 00400		;Lepton command register is at slave address 0004, write 0x0101 to it
+inst 00101
